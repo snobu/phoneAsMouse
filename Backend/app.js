@@ -6,6 +6,7 @@ var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 import * as handler from './js/handler.js';
+import * as _ from 'underscore.js';
 
 
 var port = process.env.PORT || 3000;
@@ -19,10 +20,9 @@ app.use(express.static(__dirname + '/public'));
 
 // Chatroom
 
-// usernames which are currently connected to the chat
-var usernames = {};
-var connectedUsers = {};
-var numUsers = 0;
+var connectedSenders = {};
+var connectedReceivers = {};
+
 
 io.on('connection', function (socket) {
 
@@ -31,15 +31,62 @@ io.on('connection', function (socket) {
     var response = null;
     console.log('am primit login de la client. ' + JSON.stringify(data));
 
+    var connectionId = data.connectionId;
+
+    //mouse a.k.a phone
+    if(data.clientType === "sender") {
+      connectedSenders[connectionId] = socket;
+    }
+
+    //pc
+     if(data.clientType === "receiver") {
+      connectedReceivers[connectionId] = socket;
+    }
 
 
+    callback(error, response);
+  });
+
+  socket.on('mouseMove', async(data, callback) => {
+    var connectionId = null;
+    var error = null;
+    var response = null;
+
+    _.each(connectedSenders, function (value, key) {
+      if (value == socket) {
+        connectionId = key;
+      }
+    });
+
+    if(connectionId) {
+      var pcSocket = connectedReceivers[connectionId];
+      if (pcSocket != null) {
+        pcSocket.emit('mouseMove', data, function (error, callback) {
+
+        });
+      } else {
+        error = 'PC not found';
+        console.error(error);
+      }
+
+    } else {
+      error = 'Phone not found';
+      console.error(error);
+    }
     callback(error, response);
   });
 
 
   socket.on('disconnect', function () {
     console.log('disconnected socket: ' + socket.id);
-    delete connectedUsers[socket.id];
+    if (connectedSenders[socket.id]) {
+      delete connectedSenders[socket.id];
+    }
+
+    if (connectedReceivers[socket.id]) {
+      delete connectedReceivers[socket.id];
+    }
+
   });
 
 });
